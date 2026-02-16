@@ -1,0 +1,72 @@
+{
+  "name": "PL_Incremental_Load",
+  "properties": {
+    "activities": [
+      {
+        "name": "Lookup_Watermark",
+        "type": "Lookup",
+        "dependsOn": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT LastWatermarkValue FROM WatermarkTable WHERE TableName = 'SourceOrders'"
+          },
+          "dataset": {
+            "referenceName": "DS_Raw_Watermark",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "Copy_Incremental_Orders",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Lookup_Watermark",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "@concat('SELECT * FROM SourceOrders WHERE LastModifiedDate > ''', activity('Lookup_Watermark').output.firstRow.LastWatermarkValue, '''')"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_SourceOrders1",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_TargetOrders1",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "Update_Watermark",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "Copy_Incremental_Orders",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "storedProcedureName": "UpdateWatermark"
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_AnalyticsDB",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  }
+}
